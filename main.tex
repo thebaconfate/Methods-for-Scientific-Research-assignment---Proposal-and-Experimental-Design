@@ -1,0 +1,36 @@
+\documentclass[a4paper]{article}
+
+% Load the VUB package.
+% This has many options, please read the documentation at
+% https://gitlab.com/rubdos/texlive-vub
+\usepackage{vub}
+\usepackage{hyperref}
+
+% Some highly suggested packages, please read their manuals.
+\usepackage{cleveref}
+\usepackage[natbib,style=apa]{biblatex}
+\addbibresource{bibliography.bib}
+
+
+\title{A stream processing framework in python}
+\subtitle{Proposal and experimental design}
+\author{Gérard Lichtert}
+\date{\today}
+\faculty{Sciences and Bio-Engineering Sciences} % Note, no
+\begin{document}
+\maketitle
+
+\section*{Introduction}
+With the previous technological improvements that introduced IoT and Cloud computing, where data is generated on the IoT devices and the generated data is processed in the cloud. The next question was how to make this energy-efficient. In \cite{edgevscloud} the energy consumption caused by the latency of uploading and downloading data is compared in the edge-computing and centralized cloud models. It is clear that it seems beneficial to move some of the decision making to the edge devices however, some edge devices have limited battery and could suffer from the move of cloud to edge. \cite{edgeoniot} however confirms that moving even simple decision making processes to the edge devices can significantly extend the battery life of IoT devices. \newline\newline
+Our next challenge is changing the way that data is processed, wether it be in the cloud or on the edge devices. Currently a batch system is the go-to solution. Fetching or processing data every X amount of time. We would like to make this more efficient by processing data as it become available, or more event-driven, as it was first introduced in \cite{reactmanifesto} The Reactive Manifesto. An introduction to this way of programming is introduce in \cite{FRP} where the semantics and its relation to streams are explained. However some issues can arise when the functional programming language of choice was not designed with reactivity in mind, turning the language non-functional. \cite{TacklingtheAwkwardSquad} tries to tackle this by introducing a actor-reactor model and a reactiveness classification to help the developer keep reactiveness in their programs. \newline\newline
+Next up are the difficulties with deployment, development and maintenance of distributed systems using reactive programming. When the actor-reactor programs need to communicate over the network, some issues can arise. Currently when an Actor receives a message it'll store it in a mailbox (called the buffer) and process it sequentially. But what if it receives too many messages or the message is never received at all? A solution could be the middleware that is proposed in \cite{BuildIoT} called Potato, which deals with all the added complexity of developing and deploying IoT systems on clusters. Which is what we seek. Alternatively we could also use decorators or keywords like in \cite{ScalaLoci} to declare where the actors or reactors should be located at and how actors or reactors should recover from failures while using IaC to deploy to a cluster as shown in \cite{IaC}\newline\newline
+Now for deciding which parts of the program to relocate to the edge (or which ones to keep on the cloud) we will have to use benchmarking tools that measure the energy consumption of the programs and run the program enough times so we can compute proper statistics and further analyse the data. However we will have to try different deployment configurations and keep background applications or other noise to a minimum to have a fair comparising. A tool we could use is mentioned in \cite{cruz2021tools}. \newline\newline
+Finally we still have the problem of connecting reactors and actors together. How do we deal with one to many or many to many connection? Well in Scala and in Java we have Akka Streams where we can declare how stream data is processed as well as use some advanced techniques such as graphs that allow for different junctions, such as a broadcast node, a merge node or even a balance node as shown in \cite{AkkaStream}. Would it be possible to use this as an inspiration?
+\newpage
+\section*{Proposal}
+To begin with we need to create a concrete actor-reactor model that can be deployed to a cluster where the actors and reactors can reside in different nodes and communicate with each other. For the actor part of the model we can use the thespian python actor library\footnote{https://thespianpy.com/doc/}. The actor will handle the non-reactive parts of the program. For the reactors we can use the RxPy library\footnote{https://rxpy.readthedocs.io/en/latest/index.html}, where the reactive parts of the program will reside. Both libraries support data stream handling over the network and thespian even has a fault tolerant feature where actors will restart when needed. We will have to create abstractions on top of these libraries to allow for multiple connections to and from one actor or reactor. We could do this by for example keeping a collection of addresses of the connected actors or reactors where data should be sent or received from as well as some abstractions that manage the way that data is received or sent (like in the balance node in the Akka Streams library). \newline\newline
+Second we will need to create solutions to the network issues that we can encounter. Taking inspiration from the Potato middleware and the ScalaLoci examples we can either decide to increase the buffer size to a big enough size that it shouldn't back up, 'lose' the overflow or send a message back to the sender that it should try again later. I will opt for losing the data that overflows the buffer because unless the data is so important that we are not allowed to lose it, it seems the easiest solution, in case the buffer does overflow, which should be rare. This should only happen in the case that the data stream isn't processed quickly enough that the buffer overflows. However another solution could be to use IaC such as Ansible to deploy another copy of the actor or reactor where the data stream gets redirected to if the buffer of the original actor/reactor is full. This also can also provide extra processing power when required. Since the Actor model of thespian is already concurrently we don't need to worry about it being single threaded and sequential. Nor will we have to worry that communication is lost as the Thespian library already solves these issues for us. \newline\newline
+Next up is trying to efficiently relocate the Actor-Reactors to either the edge or cloud. We will be able to find out what configuration is better by benchmarking all alternative deployment configurations in a sample program and how much each configuration consumes in terms of energy. We will have to run each configuration enough times to fuzz out noise, such as background applications, fluctuations in cycles, etc\dots and then analyze the energy consumption of the different configurations to either confirm or reject a hypothesis that a configuration is significantly better than another one. Here is where we can probably use the decorators and the IaC to our advantage to quickly redeploy the programs in different configurations, instead of doing this manually.   
+\newpage
+\printbibliography
+\end{document}
